@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt 优化助手 - Kimi/Local/GPT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #212121; }
+        .sidebar { background-color: #171717; }
+        .chat-area { background-color: #212121; }
+        .input-box { background-color: #2f2f2f; border: 1px solid #424242; }
+        .user-msg { background-color: #2f2f2f; border-radius: 15px; padding: 12px 18px; max-width: 80%; }
+        .ai-msg { background-color: transparent; padding: 12px 18px; width: 100%; }
+        .markdown-pre { background: #000; padding: 10px; border-radius: 8px; font-family: monospace; margin: 10px 0; }
+        /* 隐藏滚动条但保持功能 */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-gray-200 flex h-screen">
+
+    <!-- 左侧边栏 -->
+    <div class="sidebar w-64 flex flex-col p-3 hidden md:flex border-r border-white/10">
+        <button onclick="location.reload()" class="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-lg transition border border-white/10 mb-4">
+            <i class="fa fa-plus text-sm"></i> <span class="text-sm">新建优化任务</span>
+        </button>
+        <div class="flex-1 overflow-y-auto space-y-1">
+            <div class="p-3 text-xs text-gray-500 font-bold uppercase">最近记录</div>
+            <div class="p-3 text-sm text-gray-300 hover:bg-white/5 rounded-lg cursor-pointer truncate">优化：小红书文案</div>
+            <div class="p-3 text-sm text-gray-300 hover:bg-white/5 rounded-lg cursor-pointer truncate">优化：Python 代码注释</div>
+        </div>
+        <div class="mt-auto p-2 border-t border-white/10">
+            <div class="flex items-center gap-2 text-xs text-gray-400">
+                <div class="w-2 h-2 bg-green-500 rounded-full"></div> 系统已就绪
+            </div>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div class="flex-1 flex flex-col relative overflow-hidden">
+        <!-- 顶部导航 -->
+        <header class="h-14 border-b border-white/10 flex items-center px-6 justify-between bg-[#212121]/80 backdrop-blur-md z-20">
+            <div class="flex gap-3 items-center">
+                <select id="provider" onchange="handleProviderChange()" class="bg-transparent font-semibold outline-none text-sm cursor-pointer hover:text-white">
+                    <option value="kimi">Kimi AI (Moonshot)</option>
+                    <option value="openai">OpenAI (ChatGPT)</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="local">Localhost (本地端口)</option>
+                </select>
+                <select id="model" class="bg-transparent text-xs text-gray-400 outline-none cursor-pointer"></select>
+            </div>
+            <div class="flex items-center gap-3">
+                <input type="password" id="api-key" placeholder="在此输入 API Key" class="bg-[#2f2f2f] border border-white/10 rounded-full px-4 py-1 text-xs focus:ring-1 ring-blue-500 outline-none w-40 md:w-64">
+                <div id="local-port-config" class="hidden flex items-center gap-2">
+                    <span class="text-xs text-gray-500">端口:</span>
+                    <input type="text" id="local-url" value="http://localhost:11434/v1/chat/completions" class="bg-[#2f2f2f] border border-white/10 rounded px-2 py-1 text-[10px] w-48">
+                </div>
+            </div>
+        </header>
+
+        <!-- 聊天区域 -->
+        <div id="chat-container" class="flex-1 overflow-y-auto pb-40">
+            <div class="max-w-3xl mx-auto pt-10 px-4">
+                <div class="ai-msg flex gap-4">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-xs text-white italic">M</div>
+                    <div class="space-y-4">
+                        <p class="text-gray-200 leading-relaxed">你好！我是你的 Prompt 优化专家。请输入你的初稿，我会为你增加**上下文、角色设定、输出限制**，并利用 **Kimi** 的长文本能力进行深度优化。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部输入框 -->
+        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#212121] via-[#212121] to-transparent">
+            <div class="max-w-3xl mx-auto px-4 pb-8">
+                <div class="relative flex flex-col w-full input-box rounded-2xl shadow-2xl">
+                    <textarea id="user-input" rows="3" class="w-full bg-transparent p-4 pr-16 outline-none resize-none text-gray-100 placeholder-gray-500" placeholder="粘贴你的原始 Prompt..."></textarea>
+                    
+                    <div class="flex justify-between items-center p-2 border-t border-white/5">
+                        <div class="text-[10px] text-gray-500 pl-2">
+                            支持自动扩充核心三要素：角色、任务、格式
+                        </div>
+                        <button id="send-btn" onclick="optimize()" class="bg-white text-black h-8 px-4 rounded-full font-bold text-xs hover:bg-gray-200 transition flex items-center gap-2">
+                            <i class="fa fa-wand-magic-sparkles"></i> 立即优化
+                        </button>
+                    </div>
+                </div>
+                <p class="text-center text-[10px] text-gray-500 mt-3">注意：本地调用需确保浏览器已允许 CORS 跨域请求</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PROVIDERS = {
+            kimi: {
+                name: "Kimi AI",
+                url: "https://api.moonshot.cn/v1/chat/completions",
+                models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]
+            },
+            openai: {
+                name: "OpenAI",
+                url: "https://api.openai.com/v1/chat/completions",
+                models: ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+            },
+            deepseek: {
+                name: "DeepSeek",
+                url: "https://api.deepseek.com/v1/chat/completions",
+                models: ["deepseek-chat"]
+            },
+            local: {
+                name: "Localhost",
+                url: "http://localhost:11434/v1/chat/completions",
+                models: ["gemma:2b", "llama3:8b", "mistral:7b"]
+            }
+        };
+
+        // 初始化模型选择
+        function initModelSelect() {
+            const provider = document.getElementById('provider').value;
+            const modelSelect = document.getElementById('model');
+            modelSelect.innerHTML = '';
+            
+            PROVIDERS[provider].models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                modelSelect.appendChild(option);
+            });
+        }
+
+        // 处理提供商变更
+        function handleProviderChange() {
+            const provider = document.getElementById('provider').value;
+            const localPortConfig = document.getElementById('local-port-config');
+            
+            if (provider === 'local') {
+                localPortConfig.classList.remove('hidden');
+            } else {
+                localPortConfig.classList.add('hidden');
+            }
+            
+            initModelSelect();
+        }
+
+        // 优化Prompt
+        async function optimize() {
+            const userInput = document.getElementById('user-input').value;
+            if (!userInput.trim()) {
+                alert('请输入要优化的文本');
+                return;
+            }
+
+            const provider = document.getElementById('provider').value;
+            const model = document.getElementById('model').value;
+            const apiKey = document.getElementById('api-key').value;
+            
+            let apiUrl = PROVIDERS[provider].url;
+            if (provider === 'local') {
+                apiUrl = document.getElementById('local-url').value;
+            }
+
+            // 显示加载状态
+            const chatContainer = document.getElementById('chat-container');
+            const userMessage = `
+                <div class="user-msg flex gap-4 mt-6 justify-end">
+                    <div class="space-y-4">
+                        <p class="text-gray-200 leading-relaxed">${userInput}</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0 text-xs text-white">你</div>
+                </div>
+            `;
+            chatContainer.innerHTML += userMessage;
+            
+            const loadingMessage = `
+                <div class="ai-msg flex gap-4 mt-6" id="loading-message">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-xs text-white italic">M</div>
+                    <div class="space-y-4">
+                        <div class="flex space-x-2">
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            chatContainer.innerHTML += loadingMessage;
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                // 构建请求参数
+                const requestBody = {
+                    model: model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: '你是一个专业的Prompt优化助手，能够将普通文本转换为结构清晰、内容详尽且AI可理解的专业提示词。请根据用户输入的内容，生成包含明确指令、上下文信息、约束条件和预期输出格式的详细Prompt。不要使用任何固定模板或结构化格式，要根据具体内容生成有针对性的优化结果。'
+                        },
+                        {
+                            role: 'user',
+                            content: userInput
+                        }
+                    ],
+                    temperature: 1,
+                    max_tokens: 2048,
+                    stream: false
+                };
+
+                // 发送API请求
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API请求失败: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const optimizedPrompt = data.choices[0].message.content;
+
+                // 替换加载消息为优化结果
+                document.getElementById('loading-message').innerHTML = `
+                    <div class="space-y-4">
+                        <p class="text-gray-200 leading-relaxed">${optimizedPrompt}</p>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('API调用错误:', error);
+                document.getElementById('loading-message').innerHTML = `
+                    <div class="space-y-4">
+                        <p class="text-red-400 leading-relaxed">优化失败: ${error.message}</p>
+                        <p class="text-gray-400 text-xs">请检查API Key和网络连接</p>
+                    </div>
+                `;
+            } finally {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        }
+
+        // 初始化
+        function init() {
+            initModelSelect();
+            handleProviderChange();
+        }
+
+        // 页面加载完成后初始化
+        window.onload = init;
+    </script>
+</body>
+</html>
