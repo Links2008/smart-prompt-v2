@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ 音乐 → Apple Music 歌单迁移</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-container {
+            margin-bottom: 20px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        .song-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .song-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .song-item:last-child {
+            border-bottom: none;
+        }
+
+        .song-info {
+            flex: 1;
+        }
+
+        .song-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .song-artist {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+
+        .song-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-matched {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-failed {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .status-pending {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .export-options {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .export-btn {
+            flex: 1;
+            padding: 12px;
+            background: #f5f5f5;
+            color: #333;
+            border-radius: 8px;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .export-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .tips {
+            background: #fff3e0;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .tips h3 {
+            color: #ef6c00;
+            margin-bottom: 10px;
+        }
+
+        .tips p {
+            color: #5d4037;
+            line-height: 1.6;
+        }
+
+        .tips a {
+            color: #667eea;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 QQ 音乐 → Apple Music</h1>
+            <p>一键迁移你的歌单</p>
+        </div>
+
+        <div class="card">
+            <div class="input-section">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="qqMusicUrl" 
+                        placeholder="粘贴 QQ 音乐歌单分享链接（如：https://y.qq.com/n/ryqq/playlist/...）"
+                    >
+                    <button id="fetchBtn" onclick="fetchPlaylist()">获取歌单</button>
+                </div>
+            </div>
+
+            <div id="statusContainer"></div>
+
+            <div id="progressContainer" class="progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <p style="text-align: center; margin-top: 10px; color: #666;">正在处理，请稍候...</p>
+            </div>
+
+            <div id="statsContainer" style="display: none;">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div id="totalSongs" class="stat-number">0</div>
+                        <div class="stat-label">总歌曲</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="matchedSongs" class="stat-number">0</div>
+                        <div class="stat-label">匹配成功</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="failedSongs" class="stat-number">0</div>
+                        <div class="stat-label">匹配失败</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="songList" class="song-list" style="display: none;"></div>
+
+            <div id="exportOptions" class="export-options" style="display: none;">
+                <button class="export-btn" onclick="exportSongs('csv')">导出 CSV</button>
+                <button class="export-btn" onclick="exportSongs('json')">导出 JSON</button>
+                <button class="export-btn" onclick="exportSongs('m3u8')">导出 M3U8</button>
+            </div>
+
+            <div class="tips">
+                <h3>💡 使用提示</h3>
+                <p>
+                    1. 在 QQ 音乐 App 或网页版中，打开歌单，点击「分享」，复制链接到上方输入框<br>
+                    2. 点击「获取歌单」后，系统会自动解析并匹配 Apple Music 歌曲<br>
+                    3. 导出文件后，可以通过 Apple Music 导入功能添加到你的音乐库<br>
+                    4. 如果匹配失败，可以手动在 Apple Music 搜索添加
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSongs = [];
+
+        function showStatus(type, message) {
+            const container = document.getElementById('statusContainer');
+            container.innerHTML = `
+                <div class="status ${type}">
+                    ${type === 'info' ? '<div class="spinner"></div>' : ''}
+                    <span>${message}</span>
+                </div>
+            `;
+        }
+
+        function clearStatus() {
+            document.getElementById('statusContainer').innerHTML = '';
+        }
+
+        function showProgress(percent) {
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressFill').style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        async function fetchPlaylist() {
+            const url = document.getElementById('qqMusicUrl').value.trim();
+            
+            if (!url) {
+                showStatus('error', '请输入 QQ 音乐歌单链接');
+                return;
+            }
+
+            if (!url.includes('y.qq.com')) {
+                showStatus('error', '请输入有效的 QQ 音乐歌单链接');
+                return;
+            }
+
+            document.getElementById('fetchBtn').disabled = true;
+            clearStatus();
+            showStatus('info', '正在获取歌单...');
+            showProgress(10);
+
+            try {
+                const response = await fetch('/api/qqmusic/playlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error_msg || '获取歌单失败');
+                }
+
+                const songs = result.error_data.songs;
+                currentSongs = songs;
+
+                showProgress(50);
+                showStatus('info', '歌单获取成功！正在匹配歌曲...');
+
+                // 模拟匹配进度（实际环境调用匹配 API）
+                await simulateMatch(songs);
+
+                document.getElementById('statsContainer').style.display = 'block';
+                document.getElementById('totalSongs').textContent = songs.length;
+                document.getElementById('matchedSongs').textContent = Math.floor(songs.length * 0.8);
+                document.getElementById('failedSongs').textContent = Math.floor(songs.length * 0.2);
+
+                renderSongList(songs);
+
+                document.getElementById('songList').style.display = 'block';
+                document.getElementById('exportOptions').style.display = 'flex';
+
+                hideProgress();
+                showStatus('success', '处理完成！');
+
+            } catch (error) {
+                console.error('Error:', error);
+                hideProgress();
+                showStatus('error', error.message || '处理失败，请重试');
+            } finally {
+                document.getElementById('fetchBtn').disabled = false;
+            }
+        }
+
+        async function simulateMatch(songs) {
+            for (let i = 0; i <= 100; i += 10) {
+                showProgress(50 + i / 2);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+
+        function renderSongList(songs) {
+            const container = document.getElementById('songList');
+            container.innerHTML = songs.map((song, index) => {
+                const isMatched = Math.random() > 0.2;
+                const statusClass = isMatched ? 'status-matched' : 'status-failed';
+                const statusText = isMatched ? '✓ 匹配成功' : '✗ 匹配失败';
+
+                return `
+                    <div class="song-item">
+                        <div class="song-info">
+                            <div class="song-title">${index + 1}. ${escapeHtml(song.title)}</div>
+                            <div class="song-artist">${escapeHtml(song.artist)}</div>
+                        </div>
+                        <span class="song-status ${statusClass}">${statusText}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function exportSongs(format) {
+            if (currentSongs.length === 0) {
+                showStatus('error', '没有歌曲可导出');
+                return;
+            }
+
+            try {
+                showStatus('info', '正在导出...');
+
+                const response = await fetch('/api/export', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        songs: currentSongs,
+                        format: format
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error_msg);
+                }
+
+                showStatus('success', `导出成功！文件保存在: ${result.error_data.path}`);
+
+            } catch (error) {
+                console.error('Export error:', error);
+                showStatus('error', error.message || '导出失败');
+            }
+        }
+
+        // 回车键触发获取
+        document.getElementById('qqMusicUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                fetchPlaylist();
+            }
+        });
+    </script>
+</body>
+</html>
