@@ -1134,11 +1134,12 @@
                     </div>
                     <div class="provider-select-wrapper">
                         <select id="provider" onchange="handleProviderChange()" class="provider-select">
-                            <option value="kimi">Kimi AI</option>
-                            <option value="openai">OpenAI</option>
-                            <option value="deepseek">DeepSeek</option>
-                            <option value="local">Localhost</option>
-                        </select>
+                        <option value="doubao">豆包</option>
+                        <option value="kimi">Kimi AI</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="local">Localhost</option>
+                    </select>
                     </div>
                     <div class="model-select-wrapper">
                         <select id="model" class="model-select"></select>
@@ -1195,6 +1196,11 @@
 
     <script>
         const PROVIDERS = {
+            doubao: {
+                name: "豆包",
+                url: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+                models: ["doubao-pro-4k", "doubao-lite-4k", "doubao-lite-32k", "doubao-pro-32k"]
+            },
             kimi: {
                 name: "Kimi AI",
                 url: "https://api.moonshot.cn/v1/chat/completions",
@@ -1308,11 +1314,6 @@
             const model = document.getElementById('model').value;
             const apiKey = document.getElementById('api-key').value;
             
-            let apiUrl = PROVIDERS[provider].url;
-            if (provider === 'local') {
-                apiUrl = document.getElementById('local-url').value;
-            }
-
             const chatMessages = document.getElementById('chatMessages');
             
             const userMessageDiv = document.createElement('div');
@@ -1343,8 +1344,17 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             try {
+                // 获取自定义URL（如果有）
+                let customUrl = null;
+                if (provider === 'local') {
+                    customUrl = document.getElementById('local-url').value;
+                }
+                
                 const requestBody = {
+                    provider: provider,
                     model: model,
+                    api_key: apiKey,
+                    custom_url: customUrl,
                     messages: [
                         {
                             role: 'system',
@@ -1360,17 +1370,18 @@
                     stream: false
                 };
 
-                const response = await fetch(apiUrl, {
+                // 调用后端API
+                const response = await fetch('/api/chat/completions', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
-                    throw new Error(`API请求失败: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `API请求失败: ${response.status}`);
                 }
 
                 const data = await response.json();
