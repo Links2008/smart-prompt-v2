@@ -146,9 +146,7 @@ class QQMusicAPI:
     ) -> Optional[QQMusicPlaylist]:
         """获取QQ音乐歌单"""
         disstid = self.extract_playlist_id(url)
-        if not disstid:
-            raise ValueError("无效的QQ音乐歌单链接")
-
+        
         platforms = ["-1", "android", "iphone", "h5", "wxfshare"]
 
         for platform in platforms:
