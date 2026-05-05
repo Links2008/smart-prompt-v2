@@ -4,7 +4,7 @@ Prompt 优化器后端服务
 使用 FastAPI 提供 API 接口，避免跨域问题
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -12,7 +12,16 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import requests
 import os
+import traceback
+import logging
 from pathlib import Path
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Prompt Optimizer API", version="1.0.0")
 
@@ -76,12 +85,15 @@ async def root():
 @app.post("/api/chat/completions")
 async def chat_completions(request: ChatRequest):
     """处理聊天完成请求，转发到对应AI服务商"""
+    logger.info(f"收到请求: provider={request.provider}, model={request.model}")
     try:
         # 获取API URL
         if request.provider == "local" and request.custom_url:
             api_url = request.custom_url
         else:
             api_url = PROVIDER_CONFIG[request.provider]["url"]
+        
+        logger.info(f"请求地址: {api_url}")
         
         # 构建请求头
         headers = {
@@ -98,6 +110,8 @@ async def chat_completions(request: ChatRequest):
             "stream": request.stream
         }
         
+        logger.info(f"请求体: {body}")
+        
         # 发送请求到AI服务商
         response = requests.post(
             api_url,
@@ -105,6 +119,9 @@ async def chat_completions(request: ChatRequest):
             json=body,
             timeout=60
         )
+        
+        logger.info(f"响应状态: {response.status_code}")
+        logger.info(f"响应内容: {response.text}")
         
         # 检查响应
         if not response.ok:
@@ -117,10 +134,13 @@ async def chat_completions(request: ChatRequest):
         return response.json()
     
     except requests.Timeout:
+        logger.error("API请求超时")
         raise HTTPException(status_code=408, detail="API请求超时")
     except requests.RequestException as e:
+        logger.error(f"请求错误: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"请求错误: {str(e)}")
     except Exception as e:
+        logger.error(f"服务器错误: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"服务器错误: {str(e)}")
 
 @app.get("/api/models/{provider}")
@@ -146,5 +166,5 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=8000,
-        log_level="info"
+        log_level="debug"
     )
