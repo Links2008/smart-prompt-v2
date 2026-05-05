@@ -34,7 +34,7 @@ class PlaylistRequest(BaseModel):
     detailed: bool = False
 
 class BatchSearchRequest(BaseModel):
-    songs: List[Dict[str, str]]
+    songs: List[Dict[str, Any]]
 
 @app.get("/")
 async def root():
