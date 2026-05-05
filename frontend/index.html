@@ -285,7 +285,7 @@
                 if (song.is_live) tags += '<span class="tag tag-live">Live</span>';
                 if (song.is_remix) tags += '<span class="tag tag-remix">Remix</span>';
 
-                const searchTerm = encodeURIComponent(`${song.clean_name} ${song.singer}`);
+                const searchTerm = encodeURIComponent(`${song.clean_name} ${song.singer}`).replace(/%20/g, '+');
                 const appleMusicUrl = `https://music.apple.com/us/search?term=${searchTerm}`;
 
                 return `<div class="song-item">
@@ -329,7 +329,7 @@
 
             currentSongs.forEach((song, idx) => {
                 setTimeout(() => {
-                    const searchTerm = encodeURIComponent(`${song.clean_name} ${song.singer}`);
+                    const searchTerm = encodeURIComponent(`${song.clean_name} ${song.singer}`).replace(/%20/g, '+');
                     const appleMusicUrl = `https://music.apple.com/us/search?term=${searchTerm}`;
                     window.open(appleMusicUrl, '_blank');
                     opened++;
