@@ -1,0 +1,233 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ音乐→Apple Music歌单迁移</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 40px; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .card {
+            background: white; border-radius: 16px; padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2); margin-bottom: 20px;
+        }
+        .input-group { display: flex; gap: 15px; margin-bottom: 20px; }
+        input[type="text"] {
+            flex: 1; padding: 15px 20px; border: 2px solid #e0e0e0; border-radius: 10px;
+            font-size: 1rem; transition: border-color 0.3s;
+        }
+        input[type="text"]:focus { outline: none; border-color: #667eea; }
+        button {
+            padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; border-radius: 10px; font-size: 1rem;
+            font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102,126,234,0.4); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .status { padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+        .status.success { background: #e8f5e9; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+        .status.info { background: #e3f2fd; color: #1565c0; }
+        .song-list { max-height: 400px; overflow-y: auto; }
+        .song-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px; border-bottom: 1px solid #f0f0f0;
+        }
+        .song-item:last-child { border-bottom: none; }
+        .song-info { flex: 1; }
+        .song-title { font-weight: 600; color: #333; }
+        .song-singer { color: #666; font-size: 0.9rem; margin-top: 4px; }
+        .tag { padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; margin-left: 8px; }
+        .tag-live { background: #fff3e0; color: #ef6c00; }
+        .tag-remix { background: #e3f2fd; color: #1976d2; }
+        .export-options { display: flex; gap: 10px; margin-top: 20px; }
+        .export-btn {
+            flex: 1; padding: 12px; background: #f5f5f5; color: #333; border-radius: 8px;
+            text-align: center; font-weight: 500; transition: background 0.2s; cursor: pointer;
+        }
+        .export-btn:hover { background: #e0e0e0; }
+        .tips { background: #fff3e0; padding: 20px; border-radius: 10px; margin-top: 20px; }
+        .tips h3 { color: #ef6c00; margin-bottom: 10px; }
+        .tips p { color: #5d4037; line-height: 1.6; }
+        .tips a { color: #667eea; text-decoration: none; }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-number { font-size: 2rem; font-weight: 700; color: #667eea; }
+        .stat-label { color: #666; font-size: 0.9rem; margin-top: 5px; }
+        textarea {
+            width: 100%; min-height: 200px; padding: 15px; border: 1px solid #e0e0e0;
+            border-radius: 10px; font-family: monospace; resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 QQ音乐→Apple Music歌单迁移</h1>
+            <p>完全复刻GoMusic架构</p>
+        </div>
+        <div class="card">
+            <div class="input-group">
+                <input type="text" id="qqmusicUrl" placeholder="粘贴QQ音乐歌单链接...">
+                <button id="fetchBtn" onclick="fetchPlaylist()">获取歌单</button>
+            </div>
+            <div id="statusContainer"></div>
+            <div id="statsContainer" style="display: none;">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div id="totalSongs" class="stat-number">0</div>
+                        <div class="stat-label">总歌曲</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="liveCount" class="stat-number">0</div>
+                        <div class="stat-label">Live版本</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="remixCount" class="stat-number">0</div>
+                        <div class="stat-label">Remix版本</div>
+                    </div>
+                </div>
+            </div>
+            <div id="songListContainer" style="display: none;">
+                <h3 style="margin-bottom: 15px;">歌单内容</h3>
+                <div id="songList" class="song-list"></div>
+            </div>
+            <div id="exportContainer" style="display: none; margin-top: 20px;">
+                <h3 style="margin-bottom: 15px;">导出格式</h3>
+                <div class="export-options">
+                    <button class="export-btn" onclick="exportSongs('text')">📝 TuneMyMusic格式</button>
+                    <button class="export-btn" onclick="exportSongs('csv')">📊 CSV格式</button>
+                </div>
+                <div id="exportResultContainer" style="margin-top: 15px; display: none;">
+                    <h4 style="margin-bottom: 10px;">导出结果</h4>
+                    <textarea id="exportResult" readonly></textarea>
+                    <button onclick="copyToClipboard()" style="margin-top: 10px; width: 100%;">复制到剪贴板</button>
+                </div>
+            </div>
+            <div class="tips">
+                <h3>💡 使用说明</h3>
+                <p>
+                    1. 在QQ音乐App或网页版中，打开歌单 → 点击分享 → 复制链接
+                    <br>
+                    2. 将链接粘贴到输入框，点击获取歌单
+                    <br>
+                    3. 确认歌单内容无误后，选择导出格式
+                    <br>
+                    4. 将导出的内容复制到
+                    <a href="https://www.tunemymusic.com" target="_blank">TuneMyMusic</a>
+                    或其他工具进行导入
+                    <br><br>
+                    相关工具:<br>
+                    - TuneMyMusic: https://www.tunemymusic.com<br>
+                    - Spotlistr: https://www.spotlistr.com
+                </p>
+            </div>
+        </div>
+    </div>
+    <script>
+        let currentSongs = [];
+        function showStatus(type, message) {
+            const container = document.getElementById('statusContainer');
+            container.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        function clearStatus() { document.getElementById('statusContainer').innerHTML = ''; }
+        async function fetchPlaylist() {
+            const url = document.getElementById('qqmusicUrl').value.trim();
+            const btn = document.getElementById('fetchBtn');
+            if (!url) {
+                showStatus('error', '请输入QQ音乐歌单链接');
+                return;
+            }
+            btn.disabled = true;
+            clearStatus();
+            showStatus('info', '正在获取歌单...');
+            try {
+                const response = await fetch('/api/qqmusic/playlist', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, detailed: false })
+                });
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.detail?.error || '获取歌单失败');
+                }
+                const data = result.data;
+                currentSongs = data.songs;
+                document.getElementById('statsContainer').style.display = 'block';
+                document.getElementById('totalSongs').textContent = data.total;
+                const liveCount = data.songs.filter(s => s.is_live).length;
+                const remixCount = data.songs.filter(s => s.is_remix).length;
+                document.getElementById('liveCount').textContent = liveCount;
+                document.getElementById('remixCount').textContent = remixCount;
+                document.getElementById('songListContainer').style.display = 'block';
+                renderSongList(data.songs);
+                document.getElementById('exportContainer').style.display = 'block';
+                clearStatus();
+                showStatus('success', `成功获取歌单: ${data.name}，共${data.total}首歌曲`);
+            } catch (error) {
+                console.error('错误:', error);
+                showStatus('error', error.message || '获取失败，请检查链接是否正确');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        function renderSongList(songs) {
+            const container = document.getElementById('songList');
+            container.innerHTML = songs.map((song, idx) => {
+                let tags = '';
+                if (song.is_live) tags += '<span class="tag tag-live">Live</span>';
+                if (song.is_remix) tags += '<span class="tag tag-remix">Remix</span>';
+                return `<div class="song-item">
+                    <div class="song-info">
+                        <div class="song-title">${idx+1}. ${escapeHtml(song.clean_name)}${tags}</div>
+                        <div class="song-singer">${escapeHtml(song.singer)}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        async function exportSongs(format) {
+            try {
+                const response = await fetch('/api/export', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        format,
+                        songs: currentSongs.map(s => ({ name: s.clean_name, singer: s.singer }))
+                    })
+                });
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.detail?.error || '导出失败');
+                }
+                document.getElementById('exportResultContainer').style.display = 'block';
+                document.getElementById('exportResult').value = result.content;
+            } catch (error) {
+                showStatus('error', error.message || '导出失败');
+            }
+        }
+        function copyToClipboard() {
+            const textarea = document.getElementById('exportResult');
+            textarea.select();
+            document.execCommand('copy');
+            showStatus('success', '已复制到剪贴板！');
+        }
+        document.getElementById('qqmusicUrl').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                fetchPlaylist();
+            }
+        });
+    </script>
+</body>
+</html>
