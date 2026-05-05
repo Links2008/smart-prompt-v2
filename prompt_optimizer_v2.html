@@ -4,93 +4,740 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prompt 优化助手 - Kimi/Local/GPT</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #212121; }
-        .sidebar { background-color: #171717; }
-        .chat-area { background-color: #212121; }
-        .input-box { background-color: #2f2f2f; border: 1px solid #424242; }
-        .user-msg { background-color: #2f2f2f; border-radius: 15px; padding: 12px 18px; max-width: 80%; }
-        .ai-msg { background-color: transparent; padding: 12px 18px; width: 100%; }
-        .markdown-pre { background: #000; padding: 10px; border-radius: 8px; font-family: monospace; margin: 10px 0; }
-        /* 隐藏滚动条但保持功能 */
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 10px; }
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f9fafb;
+            --bg-tertiary: #f3f4f6;
+            --bg-glass: rgba(255, 255, 255, 0.85);
+            --bg-glass-hover: rgba(243, 244, 246, 0.95);
+            
+            --gradient-start: #c084fc;
+            --gradient-mid: #60a5fa;
+            --gradient-end: #fbbf24;
+            --gradient-accent: #a855f7;
+            --gradient-primary: linear-gradient(135deg, var(--gradient-start), var(--gradient-mid));
+            
+            --text-primary: #1f2937;
+            --text-secondary: rgba(31, 41, 55, 0.75);
+            --text-muted: rgba(31, 41, 55, 0.5);
+            --text-accent: #6d28d9;
+            --text-inverse: #ffffff;
+            
+            --border-color: rgba(31, 41, 55, 0.1);
+            --border-glow: rgba(109, 40, 217, 0.25);
+            --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --shadow-glow: 0 0 50px rgba(109, 40, 217, 0.1);
+            --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.06);
+            
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            
+            --transition-fast: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-normal: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .bg-animation::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(ellipse at 20% 30%, rgba(192, 132, 252, 0.25) 0%, transparent 45%),
+                radial-gradient(ellipse at 80% 70%, rgba(96, 165, 250, 0.2) 0%, transparent 45%),
+                radial-gradient(ellipse at 50% 50%, rgba(251, 191, 36, 0.15) 0%, transparent 40%),
+                radial-gradient(ellipse at 30% 80%, rgba(168, 85, 247, 0.2) 0%, transparent 40%),
+                radial-gradient(ellipse at 70% 20%, rgba(192, 132, 252, 0.15) 0%, transparent 45%);
+            animation: bgFloat 15s ease-in-out infinite, colorShift 25s ease-in-out infinite;
+        }
+
+        @keyframes bgFloat {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(2%, 3%) rotate(1deg); }
+            50% { transform: translate(-2%, -2%) rotate(-1deg); }
+            75% { transform: translate(1%, -3%) rotate(0.5deg); }
+        }
+
+        @keyframes colorShift {
+            0%, 100% { filter: hue-rotate(0deg) saturate(1); }
+            33% { filter: hue-rotate(45deg) saturate(1.1); }
+            66% { filter: hue-rotate(-30deg) saturate(1.05); }
+        }
+
+        .main-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--bg-glass);
+            border-right: 1px solid var(--border-color);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 10;
+        }
+
+        .sidebar-header {
+            padding: var(--spacing-lg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
+            animation: logoPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes logoPulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35); }
+            50% { box-shadow: 0 4px 25px rgba(102, 126, 234, 0.5); }
+        }
+
+        .logo-text h1 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+
+        .logo-text p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius-md);
+            color: var(--text-inverse);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-xs);
+            transition: all var(--transition-fast);
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .new-chat-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .sidebar-content {
+            flex: 1;
+            padding: var(--spacing-md);
+            overflow-y: auto;
+        }
+
+        .sidebar-section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            padding: var(--spacing-sm) var(--spacing-xs);
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .chat-history-item {
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 2px;
+        }
+
+        .chat-history-item:hover {
+            background: var(--bg-glass-hover);
+            color: var(--text-primary);
+        }
+
+        .chat-history-item.active {
+            background: rgba(192, 132, 252, 0.15);
+            color: var(--text-primary);
+        }
+
+        .sidebar-footer {
+            padding: var(--spacing-md);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            height: 72px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 var(--spacing-lg);
+            position: relative;
+            z-index: 10;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-lg);
+        }
+
+        .provider-select, .model-select {
+            background: transparent;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            transition: all var(--transition-fast);
+        }
+
+        .provider-select:hover, .model-select:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .model-select {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+        }
+
+        .api-key-input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 9999px;
+            padding: var(--spacing-xs) var(--spacing-md);
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            width: 200px;
+            transition: all var(--transition-fast);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .api-key-input:focus {
+            outline: none;
+            border-color: var(--gradient-start);
+            box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.15);
+        }
+
+        .api-key-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .local-config {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            transition: all var(--transition-fast);
+        }
+
+        .local-config span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .local-url-input {
+            background: transparent;
+            border: none;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            width: 280px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .local-url-input:focus {
+            outline: none;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-xl);
+            padding-bottom: 180px;
+        }
+
+        .chat-messages {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .message {
+            display: flex;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.4s ease forwards;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-inverse);
+        }
+
+        .message-avatar.ai {
+            background: var(--gradient-primary);
+        }
+
+        .message-avatar.user {
+            background: linear-gradient(135deg, #64748b, #475569);
+        }
+
+        .message-content {
+            flex: 1;
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            backdrop-filter: blur(10px);
+            box-shadow: var(--shadow-card);
+        }
+
+        .message-content p {
+            line-height: 1.8;
+            color: var(--text-primary);
+        }
+
+        .message-content pre {
+            background: #1f2937;
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            overflow-x: auto;
+            margin: var(--spacing-sm) 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: #e5e7eb;
+        }
+
+        .message-content code {
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            color: var(--text-accent);
+        }
+
+        .message-content pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        .user-message {
+            flex-direction: row-reverse;
+        }
+
+        .user-message .message-content {
+            background: rgba(192, 132, 252, 0.08);
+            border-color: rgba(192, 132, 252, 0.2);
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: var(--spacing-xs);
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: typingBounce 1.2s ease-in-out infinite;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: 0ms; }
+        .typing-dot:nth-child(2) { animation-delay: 150ms; }
+        .typing-dot:nth-child(3) { animation-delay: 300ms; }
+
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-6px); opacity: 1; }
+        }
+
+        .input-area {
+            position: fixed;
+            bottom: 0;
+            left: 280px;
+            right: 0;
+            padding: var(--spacing-lg) var(--spacing-xl);
+            background: linear-gradient(to top, var(--bg-primary) 70%, transparent);
+            z-index: 20;
+        }
+
+        .input-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .input-box {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            backdrop-filter: blur(20px);
+            box-shadow: var(--shadow-soft);
+            transition: all var(--transition-normal);
+            overflow: hidden;
+        }
+
+        .input-box:focus-within {
+            border-color: var(--gradient-start);
+            box-shadow: var(--shadow-soft), 0 0 0 3px rgba(192, 132, 252, 0.1);
+        }
+
+        .input-wrapper {
+            padding: var(--spacing-md) var(--spacing-lg);
+        }
+
+        #user-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            resize: none;
+            min-height: 80px;
+            max-height: 200px;
+            line-height: 1.7;
+            font-family: 'Inter', sans-serif;
+        }
+
+        #user-input:focus {
+            outline: none;
+        }
+
+        #user-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .input-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-top: 1px solid var(--border-color);
+            background: rgba(243, 244, 246, 0.5);
+        }
+
+        .input-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .send-btn {
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 9999px;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            color: var(--text-inverse);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            transition: all var(--transition-fast);
+            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-btn:active {
+            transform: scale(0.96);
+        }
+
+        .warning-text {
+            text-align: center;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: var(--spacing-sm);
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(31, 41, 55, 0.15);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(31, 41, 55, 0.25);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .input-area {
+                left: 0;
+            }
+            
+            .header {
+                padding: 0 var(--spacing-md);
+            }
+            
+            .api-key-input {
+                width: 140px;
+            }
+            
+            .local-url-input {
+                width: 180px;
+            }
+            
+            .chat-container {
+                padding: var(--spacing-md);
+                padding-bottom: 200px;
+            }
+        }
+
+        .success-toast {
+            position: fixed;
+            top: var(--spacing-lg);
+            right: var(--spacing-lg);
+            background: var(--bg-glass);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: #22c55e;
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 1000;
+            animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+            box-shadow: var(--shadow-card);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateX(100%); }
+        }
     </style>
 </head>
-<body class="text-gray-200 flex h-screen">
-
-    <!-- 左侧边栏 -->
-    <div class="sidebar w-64 flex flex-col p-3 hidden md:flex border-r border-white/10">
-        <button onclick="location.reload()" class="flex items-center gap-3 w-full p-3 hover:bg-white/5 rounded-lg transition border border-white/10 mb-4">
-            <i class="fa fa-plus text-sm"></i> <span class="text-sm">新建优化任务</span>
-        </button>
-        <div class="flex-1 overflow-y-auto space-y-1">
-            <div class="p-3 text-xs text-gray-500 font-bold uppercase">最近记录</div>
-            <div class="p-3 text-sm text-gray-300 hover:bg-white/5 rounded-lg cursor-pointer truncate">优化：小红书文案</div>
-            <div class="p-3 text-sm text-gray-300 hover:bg-white/5 rounded-lg cursor-pointer truncate">优化：Python 代码注释</div>
-        </div>
-        <div class="mt-auto p-2 border-t border-white/10">
-            <div class="flex items-center gap-2 text-xs text-gray-400">
-                <div class="w-2 h-2 bg-green-500 rounded-full"></div> 系统已就绪
-            </div>
-        </div>
-    </div>
-
-    <!-- 主界面 -->
-    <div class="flex-1 flex flex-col relative overflow-hidden">
-        <!-- 顶部导航 -->
-        <header class="h-14 border-b border-white/10 flex items-center px-6 justify-between bg-[#212121]/80 backdrop-blur-md z-20">
-            <div class="flex gap-3 items-center">
-                <select id="provider" onchange="handleProviderChange()" class="bg-transparent font-semibold outline-none text-sm cursor-pointer hover:text-white">
-                    <option value="kimi">Kimi AI (Moonshot)</option>
-                    <option value="openai">OpenAI (ChatGPT)</option>
-                    <option value="deepseek">DeepSeek</option>
-                    <option value="local">Localhost (本地端口)</option>
-                </select>
-                <select id="model" class="bg-transparent text-xs text-gray-400 outline-none cursor-pointer"></select>
-            </div>
-            <div class="flex items-center gap-3">
-                <input type="password" id="api-key" placeholder="在此输入 API Key" class="bg-[#2f2f2f] border border-white/10 rounded-full px-4 py-1 text-xs focus:ring-1 ring-blue-500 outline-none w-40 md:w-64">
-                <div id="local-port-config" class="hidden flex items-center gap-2">
-                    <span class="text-xs text-gray-500">端口:</span>
-                    <input type="text" id="local-url" value="http://localhost:11434/v1/chat/completions" class="bg-[#2f2f2f] border border-white/10 rounded px-2 py-1 text-[10px] w-48">
-                </div>
-            </div>
-        </header>
-
-        <!-- 聊天区域 -->
-        <div id="chat-container" class="flex-1 overflow-y-auto pb-40">
-            <div class="max-w-3xl mx-auto pt-10 px-4">
-                <div class="ai-msg flex gap-4">
-                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-xs text-white italic">M</div>
-                    <div class="space-y-4">
-                        <p class="text-gray-200 leading-relaxed">你好！我是你的 Prompt 优化专家。请输入你的初稿，我会为你增加**上下文、角色设定、输出限制**，并利用 **Kimi** 的长文本能力进行深度优化。</p>
+<body>
+    <div class="bg-animation"></div>
+    
+    <div class="main-wrapper">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="logo-icon">✨</div>
+                    <div class="logo-text">
+                        <h1>Smart Prompt</h1>
+                        <p>智能Prompt优化</p>
                     </div>
                 </div>
+                <button class="new-chat-btn" onclick="location.reload()">
+                    <i class="fa fa-plus"></i> 新建优化任务
+                </button>
             </div>
-        </div>
-
-        <!-- 底部输入框 -->
-        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#212121] via-[#212121] to-transparent">
-            <div class="max-w-3xl mx-auto px-4 pb-8">
-                <div class="relative flex flex-col w-full input-box rounded-2xl shadow-2xl">
-                    <textarea id="user-input" rows="3" class="w-full bg-transparent p-4 pr-16 outline-none resize-none text-gray-100 placeholder-gray-500" placeholder="粘贴你的原始 Prompt..."></textarea>
-                    
-                    <div class="flex justify-between items-center p-2 border-t border-white/5">
-                        <div class="text-[10px] text-gray-500 pl-2">
-                            支持自动扩充核心三要素：角色、任务、格式
+            
+            <div class="sidebar-content">
+                <div class="sidebar-section-title">最近记录</div>
+                <div class="chat-history-item active">
+                    <i class="fa-regular fa-comment"></i>
+                    <span>优化：小红书文案</span>
+                </div>
+                <div class="chat-history-item">
+                    <i class="fa-regular fa-comment"></i>
+                    <span>优化：Python 代码注释</span>
+                </div>
+                <div class="chat-history-item">
+                    <i class="fa-regular fa-comment"></i>
+                    <span>优化：产品需求文档</span>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>系统已就绪</span>
+                </div>
+            </div>
+        </aside>
+        
+        <main class="main-content">
+            <header class="header">
+                <div class="header-left">
+                    <select id="provider" onchange="handleProviderChange()" class="provider-select">
+                        <option value="kimi">Kimi AI (Moonshot)</option>
+                        <option value="openai">OpenAI (ChatGPT)</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="local">Localhost (本地端口)</option>
+                    </select>
+                    <select id="model" class="model-select"></select>
+                </div>
+                
+                <div class="header-right">
+                    <input type="password" id="api-key" placeholder="输入 API Key" class="api-key-input">
+                    <div id="local-port-config" class="local-config" style="display: none;">
+                        <span>端口:</span>
+                        <input type="text" id="local-url" value="http://localhost:11434/v1/chat/completions" class="local-url-input">
+                    </div>
+                </div>
+            </header>
+            
+            <div class="chat-container">
+                <div class="chat-messages">
+                    <div class="message">
+                        <div class="message-avatar ai">M</div>
+                        <div class="message-content">
+                            <p>你好！我是你的 <strong>Prompt 优化专家</strong>。请输入你的初稿，我会为你增加<strong>上下文、角色设定、输出限制</strong>，并利用 AI 的能力进行深度优化。</p>
                         </div>
-                        <button id="send-btn" onclick="optimize()" class="bg-white text-black h-8 px-4 rounded-full font-bold text-xs hover:bg-gray-200 transition flex items-center gap-2">
-                            <i class="fa fa-wand-magic-sparkles"></i> 立即优化
-                        </button>
                     </div>
                 </div>
-                <p class="text-center text-[10px] text-gray-500 mt-3">注意：本地调用需确保浏览器已允许 CORS 跨域请求</p>
             </div>
-        </div>
+            
+            <div class="input-area">
+                <div class="input-container">
+                    <div class="input-box">
+                        <div class="input-wrapper">
+                            <textarea id="user-input" rows="3" placeholder="粘贴你的原始 Prompt..."></textarea>
+                        </div>
+                        <div class="input-footer">
+                            <div class="input-hint">
+                                <i class="fa fa-wand-magic-sparkles"></i>
+                                <span>支持自动扩充核心三要素：角色、任务、格式</span>
+                            </div>
+                            <button id="send-btn" onclick="optimize()" class="send-btn">
+                                <i class="fa fa-paper-plane"></i>
+                                立即优化
+                            </button>
+                        </div>
+                    </div>
+                    <p class="warning-text">注意：本地调用需确保浏览器已允许 CORS 跨域请求</p>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script>
@@ -117,7 +764,6 @@
             }
         };
 
-        // 初始化模型选择
         function initModelSelect() {
             const provider = document.getElementById('provider').value;
             const modelSelect = document.getElementById('model');
@@ -131,21 +777,33 @@
             });
         }
 
-        // 处理提供商变更
         function handleProviderChange() {
             const provider = document.getElementById('provider').value;
             const localPortConfig = document.getElementById('local-port-config');
             
             if (provider === 'local') {
-                localPortConfig.classList.remove('hidden');
+                localPortConfig.style.display = 'flex';
             } else {
-                localPortConfig.classList.add('hidden');
+                localPortConfig.style.display = 'none';
             }
             
             initModelSelect();
         }
 
-        // 优化Prompt
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'success-toast';
+            toast.innerHTML = `<i class="fa fa-check-circle"></i> ${message}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('已复制到剪贴板');
+            });
+        }
+
         async function optimize() {
             const userInput = document.getElementById('user-input').value;
             if (!userInput.trim()) {
@@ -162,35 +820,36 @@
                 apiUrl = document.getElementById('local-url').value;
             }
 
-            // 显示加载状态
-            const chatContainer = document.getElementById('chat-container');
-            const userMessage = `
-                <div class="user-msg flex gap-4 mt-6 justify-end">
-                    <div class="space-y-4">
-                        <p class="text-gray-200 leading-relaxed">${userInput}</p>
-                    </div>
-                    <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0 text-xs text-white">你</div>
-                </div>
-            `;
-            chatContainer.innerHTML += userMessage;
+            const chatMessages = document.querySelector('.chat-messages');
             
-            const loadingMessage = `
-                <div class="ai-msg flex gap-4 mt-6" id="loading-message">
-                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-xs text-white italic">M</div>
-                    <div class="space-y-4">
-                        <div class="flex space-x-2">
-                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
-                        </div>
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'message user-message';
+            userMessageDiv.innerHTML = `
+                <div class="message-avatar user">你</div>
+                <div class="message-content">
+                    <p>${userInput.replace(/\n/g, '<br>')}</p>
+                </div>
+            `;
+            chatMessages.appendChild(userMessageDiv);
+            
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message';
+            loadingDiv.id = 'loading-message';
+            loadingDiv.innerHTML = `
+                <div class="message-avatar ai">M</div>
+                <div class="message-content">
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
                     </div>
                 </div>
             `;
-            chatContainer.innerHTML += loadingMessage;
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            chatMessages.appendChild(loadingDiv);
+            
+            document.querySelector('.chat-container').scrollTop = document.querySelector('.chat-container').scrollHeight;
 
             try {
-                // 构建请求参数
                 const requestBody = {
                     model: model,
                     messages: [
@@ -208,7 +867,6 @@
                     stream: false
                 };
 
-                // 发送API请求
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
@@ -225,32 +883,33 @@
                 const data = await response.json();
                 const optimizedPrompt = data.choices[0].message.content;
 
-                // 替换加载消息为优化结果
-                document.getElementById('loading-message').innerHTML = `
-                    <div class="space-y-4">
-                        <p class="text-gray-200 leading-relaxed">${optimizedPrompt}</p>
+                loadingDiv.innerHTML = `
+                    <div class="message-avatar ai">M</div>
+                    <div class="message-content">
+                        <p>${optimizedPrompt.replace(/\n/g, '<br>')}</p>
                     </div>
                 `;
+                
+                document.getElementById('user-input').value = '';
             } catch (error) {
                 console.error('API调用错误:', error);
-                document.getElementById('loading-message').innerHTML = `
-                    <div class="space-y-4">
-                        <p class="text-red-400 leading-relaxed">优化失败: ${error.message}</p>
-                        <p class="text-gray-400 text-xs">请检查API Key和网络连接</p>
+                loadingDiv.innerHTML = `
+                    <div class="message-avatar ai">M</div>
+                    <div class="message-content">
+                        <p style="color: #ef4444;">优化失败: ${error.message}</p>
+                        <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">请检查API Key和网络连接</p>
                     </div>
                 `;
             } finally {
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                document.querySelector('.chat-container').scrollTop = document.querySelector('.chat-container').scrollHeight;
             }
         }
 
-        // 初始化
         function init() {
             initModelSelect();
             handleProviderChange();
         }
 
-        // 页面加载完成后初始化
         window.onload = init;
     </script>
 </body>
