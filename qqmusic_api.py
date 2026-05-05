@@ -117,6 +117,14 @@ class QQMusicAPI:
     @staticmethod
     def extract_playlist_id(url: str) -> Optional[int]:
         """从URL中提取歌单ID"""
+        # 检测短链接或分享链接
+        if any(keyword in url for keyword in ["fcgi-bin", "c6.y.qq.com", "__="]):
+            raise ValueError("检测到短链接/分享链接，请提供标准QQ音乐歌单链接")
+        
+        # 检测是否需要登录
+        if any(keyword in url for keyword in ["login", "privacy", "private"]):
+            raise ValueError("链接需要登录或为私密歌单，请提供公开可访问的歌单链接")
+        
         # 匹配 playlist/数字
         playlist_match = re.search(r"playlist/(\d+)", url)
         if playlist_match:
@@ -126,6 +134,10 @@ class QQMusicAPI:
         id_match = re.search(r"id=(\d+)", url)
         if id_match:
             return int(id_match.group(1))
+
+        # 最后检查是否为标准QQ音乐域名
+        if "y.qq.com" not in url:
+            raise ValueError("请提供有效的QQ音乐歌单链接")
 
         return None
 
