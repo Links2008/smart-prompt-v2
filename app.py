@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-QQ音乐→Apple Music歌单迁移工具 - 曲线救国版
-无需Developer Token，直接生成Apple Music搜索链接
+QQ音乐→Apple Music歌单迁移工具 - 曲线救国版 v2
+使用iTunes Search API直接跳转到Apple Music
 """
 import sys
 from pathlib import Path
@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from qqmusic_api import QQMusicAPI
 from data_cleaner import DataCleaner, Exporter
 
-app = FastAPI(title="QQ音乐→Apple Music歌单迁移工具", version="4.0.0")
+app = FastAPI(title="QQ音乐→Apple Music歌单迁移工具", version="4.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,7 +35,7 @@ async def root():
     index_path = BASE_DIR / "frontend" / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return {"message": "QQ音乐→Apple Music歌单迁移工具", "version": "4.0.0", "docs": "/docs"}
+    return {"message": "QQ音乐→Apple Music歌单迁移工具", "version": "4.1.0", "docs": "/docs"}
 
 @app.post("/api/qqmusic/playlist")
 async def fetch_playlist(request: PlaylistRequest):
@@ -119,8 +119,6 @@ def create_frontend():
         button.apple {
             background: linear-gradient(135deg, #fc3c44 0%, #fc3c44 100%);
         }
-        button.secondary { background: #f5f5f5; color: #333; }
-        button.secondary:hover { background: #e0e0e0; box-shadow: none; }
         .status { padding: 15px; border-radius: 10px; margin-bottom: 20px; }
         .status.success { background: #e8f5e9; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
@@ -145,7 +143,6 @@ def create_frontend():
             min-width: 150px;
         }
         .export-btn:hover { background: #e0e0e0; }
-        .export-btn.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
         .tips { background: #fff3e0; padding: 20px; border-radius: 10px; margin-top: 20px; }
         .tips h3 { color: #ef6c00; margin-bottom: 10px; }
         .tips p { color: #5d4037; line-height: 1.6; }
@@ -170,6 +167,8 @@ def create_frontend():
             font-size: 0.9rem;
             display: inline-block;
             transition: background 0.2s;
+            cursor: pointer;
+            border: none;
         }
         .search-link:hover {
             background: #d32f2f;
@@ -184,32 +183,13 @@ def create_frontend():
             margin-bottom: 15px;
             color: #333;
         }
-        .progress {
-            margin-top: 20px;
-        }
-        .progress-bar {
-            height: 20px;
-            background: #e0e0e0;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-        }
-        .progress-text {
-            text-align: center;
-            margin-top: 10px;
-            color: #666;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🎵 QQ音乐→Apple Music歌单迁移</h1>
-            <p>曲线救国版 - 无需Developer Token</p>
+            <p>曲线救国版 v2 - 使用iTunes搜索</p>
         </div>
 
         <div class="card">
@@ -248,7 +228,7 @@ def create_frontend():
                 <div class="batch-actions">
                     <h3>批量操作</h3>
                     <p style="margin-bottom: 15px; color: #666;">
-                        点击下方按钮，将自动依次打开Apple Music搜索页面，您可以快速添加歌曲到歌单
+                        点击下方按钮，将自动依次在Apple Music中搜索歌曲
                     </p>
                     <button class="apple" onclick="openAllInAppleMusic()">
                         🍎 在Apple Music中批量搜索所有歌曲
@@ -368,18 +348,15 @@ def create_frontend():
                 if (song.is_live) tags += '<span class="tag tag-live">Live</span>';
                 if (song.is_remix) tags += '<span class="tag tag-remix">Remix</span>';
 
-                const searchTerm = encodeURIComponent(`${song.clean_name} ${song.singer}`);
-                const appleMusicUrl = `https://music.apple.com/us/search?term=${searchTerm}`;
-
                 return `<div class="song-item">
                     <div class="song-info">
                         <div class="song-title">${idx+1}. ${escapeHtml(song.clean_name)}${tags}</div>
                         <div class="song-singer">${escapeHtml(song.singer)}</div>
                     </div>
                     <div class="song-actions">
-                        <a href="${appleMusicUrl}" target="_blank" class="search-link">
+                        <button class="search-link" onclick="searchInAppleMusic('${escapeHtml(song.clean_name)}', '${escapeHtml(song.singer)}')">
                             在Apple Music搜索
-                        </a>
+                        </button>
                     </div>
                 </div>`;
             }).join('');
@@ -391,6 +368,39 @@ def create_frontend():
             return div.innerHTML;
         }
 
+        async function searchInAppleMusic(songName, singer) {
+            const searchTerm = `${songName} ${singer}`;
+            const encodedTerm = encodeURIComponent(searchTerm);
+            
+            // 使用iTunes Search API
+            const itunesUrl = `https://itunes.apple.com/search?term=${encodedTerm}&media=music&entity=song&limit=5`;
+            
+            try {
+                showStatus('info', '正在搜索...');
+                
+                const response = await fetch(itunesUrl);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    // 打开第一个结果的Apple Music链接
+                    const trackViewUrl = data.results[0].trackViewUrl;
+                    window.open(trackViewUrl, '_blank');
+                    showStatus('success', '已找到歌曲并在Apple Music中打开');
+                } else {
+                    // 如果找不到，打开Apple Music搜索页面
+                    const appleMusicSearchUrl = `https://music.apple.com/us/search?term=${encodedTerm}`;
+                    window.open(appleMusicSearchUrl, '_blank');
+                    showStatus('info', '未在iTunes找到，已在Apple Music中打开搜索页面');
+                }
+            } catch (error) {
+                console.error('搜索失败:', error);
+                // 出错时也打开Apple Music搜索页面
+                const appleMusicSearchUrl = `https://music.apple.com/us/search?term=${encodedTerm}`;
+                window.open(appleMusicSearchUrl, '_blank');
+                showStatus('error', '搜索出错，已在Apple Music中打开搜索页面');
+            }
+        }
+
         function openAllInAppleMusic() {
             if (currentSongs.length === 0) {
                 showStatus('error', '请先获取歌单');
@@ -398,7 +408,7 @@ def create_frontend():
             }
 
             const confirmed = confirm(
-                `即将打开 ${currentSongs.length} 个Apple Music搜索页面\\n` +
+                `即将搜索并打开 ${currentSongs.length} 首歌曲\\n` +
                 `请确保浏览器允许弹窗\\n\\n` +
                 `是否继续？`
             );
@@ -407,23 +417,21 @@ def create_frontend():
                 return;
             }
 
-            let opened = 0;
-            const delay = 500; // 每个链接间隔500ms
+            let processed = 0;
+            const delay = 1000; // 每个搜索间隔1秒
 
             currentSongs.forEach((song, idx) => {
                 setTimeout(() => {
-                    const searchTerm = encodeURIComponent(`${song.clean_name} ${song.singer}`);
-                    const appleMusicUrl = `https://music.apple.com/us/search?term=${searchTerm}`;
-                    window.open(appleMusicUrl, '_blank');
-                    opened++;
+                    searchInAppleMusic(song.clean_name, song.singer);
+                    processed++;
 
-                    if (opened === currentSongs.length) {
-                        showStatus('success', `已打开 ${opened} 个Apple Music搜索页面`);
+                    if (processed === currentSongs.length) {
+                        showStatus('success', `已处理 ${processed} 首歌曲`);
                     }
                 }, idx * delay);
             });
 
-            showStatus('info', `正在打开 ${currentSongs.length} 个搜索页面...`);
+            showStatus('info', `正在处理 ${currentSongs.length} 首歌曲...`);
         }
 
         async function exportSongs(format) {
@@ -475,10 +483,10 @@ if __name__ == "__main__":
     import uvicorn
 
     print("=" * 60)
-    print("🎵 QQ音乐→Apple Music歌单迁移工具 - 曲线救国版")
+    print("🎵 QQ音乐→Apple Music歌单迁移工具 - 曲线救国版 v2")
     print("=" * 60)
     print()
-    print("🎉 无需Developer Token，直接搜索添加")
+    print("🎉 使用iTunes Search API直接跳转到Apple Music")
     print("🌐 访问: http://localhost:8000")
     print("📚 文档: http://localhost:8000/docs")
     print()
@@ -486,8 +494,9 @@ if __name__ == "__main__":
     print("  - ✅ QQ音乐官方API调用（含签名算法）")
     print("  - ✅ 数据清洗与标准化")
     print("  - ✅ 歌曲标签检测（Live/Remix等）")
-    print("  - ✅ 一键在Apple Music中搜索")
-    print("  - ✅ 批量打开搜索页面")
+    print("  - ✅ iTunes Search API搜索")
+    print("  - ✅ 自动跳转到Apple Music歌曲页面")
+    print("  - ✅ 批量搜索并打开")
     print("  - ✅ TuneMyMusic格式导出")
     print("  - ✅ 支持公开歌单")
     print()
