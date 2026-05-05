@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from qqmusic_api import QQMusicAPI
 from data_cleaner import DataCleaner, Exporter
@@ -29,9 +29,11 @@ app.add_middleware(
 BASE_DIR = Path(__file__).parent
 
 class PlaylistRequest(BaseModel):
+    model_config = ConfigDict(extra='ignore')
     url: str
 
 class BatchSearchRequest(BaseModel):
+    model_config = ConfigDict(extra='ignore')
     songs: List[Dict[str, Any]]
 
 @app.get("/")
