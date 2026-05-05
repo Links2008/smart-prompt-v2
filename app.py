@@ -6,6 +6,7 @@ QQ音乐→Apple Music歌单迁移工具 - 批量版
 import sys
 import asyncio
 import aiohttp
+import urllib.parse
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
@@ -80,7 +81,7 @@ async def search_itunes(request: BatchSearchRequest):
             search_term = f"{song_name} {singer}"
             
             try:
-                url = f"https://itunes.apple.com/search?term={search_term}&media=music&entity=song&limit=1"
+                url = f"https://itunes.apple.com/search?term={urllib.parse.quote(search_term)}&media=music&entity=song&limit=1"
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if response.status == 200:
                         data = await response.json()
