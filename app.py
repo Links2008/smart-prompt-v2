@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-QQ音乐→Apple Music歌单迁移工具 - 简化稳定版
+QQ音乐→Apple Music歌单迁移工具 - 最终修复版
 """
 import sys
 import asyncio
@@ -10,13 +10,13 @@ from pathlib import Path
 from typing import List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from qqmusic_api import QQMusicAPI
-from data_cleaner import DataCleaner, Exporter
+from data_cleaner import DataCleaner
 
-app = FastAPI(title="QQ音乐→Apple Music歌单迁移工具", version="7.0.0")
+app = FastAPI(title="QQ音乐→Apple Music歌单迁移工具", version="8.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,97 +28,16 @@ app.add_middleware(
 
 BASE_DIR = Path(__file__).parent
 
-class PlaylistRequest(BaseModel):
-    model_config = ConfigDict(extra='ignore')
-    url: str
-
-class BatchSearchRequest(BaseModel):
-    model_config = ConfigDict(extra='ignore')
-    songs: List[Dict[str, Any]]
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=400,
+        content={"success": False, "error": str(exc)}
+    )
 
 @app.get("/")
 async def root():
-    return FileResponse(BASE_DIR / "frontend" / "index.html")
-
-@app.post("/api/qqmusic/playlist")
-async def fetch_playlist(request: PlaylistRequest):
-    try:
-        api = QQMusicAPI()
-        playlist = api.fetch_playlist(request.url)
-
-        songs_data = []
-        for song in playlist.songs:
-            clean_name = DataCleaner.clean_song_name(song.name)
-            standard_song = DataCleaner.standardize(song.name, song.singer_name)
-            songs_data.append({
-                "original_name": song.name,
-                "clean_name": clean_name,
-                "singer": song.singer_name,
-                "is_live": standard_song.is_live,
-                "is_remix": standard_song.is_remix
-            })
-
-        return {"success": True, "data": {"name": playlist.name, "songs": songs_data, "total": len(songs_data)}}
-    except Exception as e:
-        print(f"错误: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail={"success": False, "error": str(e)})
-
-@app.post("/api/search-itunes")
-async def search_itunes(request: BatchSearchRequest):
-    """批量搜索iTunes，返回Apple Music链接"""
-    results = []
-    
-    async with aiohttp.ClientSession() as session:
-        for i, song in enumerate(request.songs):
-            song_name = song.get("name", "")
-            singer = song.get("singer", "")
-            search_term = f"{song_name} {singer}"
-            
-            try:
-                url = f"https://itunes.apple.com/search?term={urllib.parse.quote(search_term)}&media=music&entity=song&limit=1"
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data.get("results") and len(data["results"]) > 0:
-                            track = data["results"][0]
-                            results.append({
-                                "original": song,
-                                "found": True,
-                                "apple_music_url": track.get("trackViewUrl", ""),
-                                "track_name": track.get("trackName", ""),
-                                "artist_name": track.get("artistName", "")
-                            })
-                        else:
-                            results.append({
-                                "original": song,
-                                "found": False,
-                                "apple_music_url": "",
-                                "error": "未找到"
-                            })
-                    else:
-                        results.append({
-                            "original": song,
-                            "found": False,
-                            "apple_music_url": "",
-                            "error": f"HTTP {response.status}"
-                        })
-            except Exception as e:
-                results.append({
-                    "original": song,
-                    "found": False,
-                    "apple_music_url": "",
-                    "error": str(e)
-                })
-            
-            if i < len(request.songs) - 1:
-                await asyncio.sleep(0.3)
-    
-    return {"success": True, "results": results}
-
-def create_frontend():
-    html_content = """
+    html = """
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -235,7 +154,7 @@ def create_frontend():
                 <div class="batch-section">
                     <h3>🚀 批量迁移</h3>
                     <p>点击按钮自动搜索所有歌曲并生成Apple Music链接</p>
-                    <button onclick="startSearch()" style="width: 100%;">🔍 开始搜索</button>
+                    <button id="searchBtn" onclick="startSearch()" style="width: 100%;">🔍 开始搜索</button>
                 </div>
             </div>
 
@@ -265,7 +184,7 @@ def create_frontend():
         let results = [];
 
         function showStatus(type, msg) {
-            document.getElementById('statusDiv').innerHTML = `<div class="status ${type}">${msg}</div>`;
+            document.getElementById('statusDiv').innerHTML = '<div class="status ' + type + '">' + msg + '</div>';
         }
 
         function clearStatus() {
@@ -279,6 +198,12 @@ def create_frontend():
                 return;
             }
 
+            // 检查URL格式
+            if (!url.includes('qq.com')) {
+                showStatus('error', '请输入有效的QQ音乐歌单链接');
+                return;
+            }
+
             const btn = document.getElementById('fetchBtn');
             btn.disabled = true;
             showStatus('info', '正在获取歌单...');
@@ -287,13 +212,13 @@ def create_frontend():
                 const res = await fetch('/api/qqmusic/playlist', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url })
+                    body: JSON.stringify({ url: url })
                 });
 
                 const data = await res.json();
 
                 if (!data.success) {
-                    throw new Error(data.detail?.error || '获取失败');
+                    throw new Error(data.error || '获取失败');
                 }
 
                 songs = data.data.songs;
@@ -308,7 +233,7 @@ def create_frontend():
 
                 document.getElementById('batchDiv').classList.remove('hidden');
 
-                showStatus('success', `成功获取: ${data.data.name}，共${data.data.total}首`);
+                showStatus('success', '成功获取: ' + data.data.name + '，共' + data.data.total + '首');
 
             } catch (e) {
                 console.error(e);
@@ -319,7 +244,9 @@ def create_frontend():
         }
 
         function renderSongs(sgs) {
-            const html = sgs.map((s, i) => {
+            let html = '';
+            for (let i = 0; i < sgs.length; i++) {
+                const s = sgs[i];
                 let tags = '';
                 if (s.is_live) tags += '<span class="tag tag-live">Live</span>';
                 if (s.is_remix) tags += '<span class="tag tag-remix">Remix</span>';
@@ -329,11 +256,11 @@ def create_frontend():
                 else if (s.status === 'not-found') status = '<span class="song-status not-found">✗</span>';
                 else status = '<span class="song-status pending">○</span>';
 
-                return `<div class="song-item">
-                    <div class="song-title">${i+1}. ${s.clean_name}${tags} ${status}</div>
-                    <div class="song-singer">${s.singer}</div>
-                </div>`;
-            }).join('');
+                html += '<div class="song-item">' +
+                    '<div class="song-title">' + (i+1) + '. ' + s.clean_name + tags + ' ' + status + '</div>' +
+                    '<div class="song-singer">' + s.singer + '</div>' +
+                '</div>';
+            }
             document.getElementById('songsList').innerHTML = html;
         }
 
@@ -343,6 +270,8 @@ def create_frontend():
                 return;
             }
 
+            const btn = document.getElementById('searchBtn');
+            btn.disabled = true;
             document.getElementById('progressDiv').classList.remove('hidden');
             showStatus('info', '正在搜索...');
 
@@ -350,24 +279,25 @@ def create_frontend():
                 const res = await fetch('/api/search-itunes', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ songs: songs.map(s => ({ name: s.clean_name, singer: s.singer })) })
+                    body: JSON.stringify({ songs: songs.map(function(s) { return { name: s.clean_name, singer: s.singer }; }) })
                 });
 
                 const data = await res.json();
 
                 if (!data.success) {
-                    throw new Error('搜索失败');
+                    throw new Error(data.error || '搜索失败');
                 }
 
                 results = data.results;
 
                 let found = 0;
                 let notFound = 0;
-                results.forEach((r, i) => {
+                for (let i = 0; i < results.length; i++) {
+                    const r = results[i];
                     songs[i].status = r.found ? 'found' : 'not-found';
                     if (r.found) found++;
                     else notFound++;
-                });
+                }
 
                 document.getElementById('foundNum').textContent = found;
                 document.getElementById('notFoundNum').textContent = notFound;
@@ -375,53 +305,141 @@ def create_frontend():
 
                 document.getElementById('linksDiv').classList.remove('hidden');
 
-                showStatus('success', `搜索完成！找到${found}首，未找到${notFound}首`);
+                showStatus('success', '搜索完成！找到' + found + '首，未找到' + notFound + '首');
 
             } catch (e) {
                 console.error(e);
                 showStatus('error', '搜索失败: ' + e.message);
             } finally {
+                btn.disabled = false;
                 document.getElementById('progressDiv').classList.add('hidden');
             }
         }
 
         function openAllLinks() {
-            const found = results.filter(r => r.found && r.apple_music_url);
+            const found = results.filter(function(r) { return r.found && r.apple_music_url; });
             if (found.length === 0) {
                 showStatus('error', '没有可打开的链接');
                 return;
             }
 
-            if (!confirm(`即将打开${found.length}个页面，是否继续？`)) return;
+            if (!confirm('即将打开' + found.length + '个页面，是否继续？')) return;
 
-            found.forEach((s, i) => {
-                setTimeout(() => {
+            for (let i = 0; i < found.length; i++) {
+                const s = found[i];
+                setTimeout(function() {
                     window.open(s.apple_music_url, '_blank');
                 }, i * 500);
-            });
+            }
 
-            showStatus('success', `正在打开${found.length}个页面...`);
+            showStatus('success', '正在打开' + found.length + '个页面...');
         }
 
-        document.getElementById('urlInput').addEventListener('keypress', e => {
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') fetchPlaylist();
         });
     </script>
 </body>
 </html>
 """
-    frontend_dir = BASE_DIR / "frontend"
-    frontend_dir.mkdir(exist_ok=True)
-    (frontend_dir / "index.html").write_text(html_content, encoding="utf-8")
+    return HTMLResponse(content=html)
+
+@app.post("/api/qqmusic/playlist")
+async def fetch_playlist(request: BaseModel):
+    try:
+        url = getattr(request, 'url', '')
+        if not url:
+            raise ValueError("请提供QQ音乐歌单链接")
+        
+        api = QQMusicAPI()
+        playlist = api.fetch_playlist(url)
+
+        songs_data = []
+        for song in playlist.songs:
+            clean_name = DataCleaner.clean_song_name(song.name)
+            standard_song = DataCleaner.standardize(song.name, song.singer_name)
+            songs_data.append({
+                "original_name": song.name,
+                "clean_name": clean_name,
+                "singer": song.singer_name,
+                "is_live": standard_song.is_live,
+                "is_remix": standard_song.is_remix
+            })
+
+        return {"success": True, "data": {"name": playlist.name, "songs": songs_data, "total": len(songs_data)}}
+    except Exception as e:
+        print(f"错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/search-itunes")
+async def search_itunes(request: BaseModel):
+    """批量搜索iTunes，返回Apple Music链接"""
+    try:
+        songs = getattr(request, 'songs', [])
+        results = []
+        
+        async with aiohttp.ClientSession() as session:
+            for i, song in enumerate(songs):
+                song_name = song.get("name", "")
+                singer = song.get("singer", "")
+                search_term = f"{song_name} {singer}"
+                
+                try:
+                    url = f"https://itunes.apple.com/search?term={urllib.parse.quote(search_term)}&media=music&entity=song&limit=1"
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            if data.get("results") and len(data["results"]) > 0:
+                                track = data["results"][0]
+                                results.append({
+                                    "original": song,
+                                    "found": True,
+                                    "apple_music_url": track.get("trackViewUrl", ""),
+                                    "track_name": track.get("trackName", ""),
+                                    "artist_name": track.get("artistName", "")
+                                })
+                            else:
+                                results.append({
+                                    "original": song,
+                                    "found": False,
+                                    "apple_music_url": "",
+                                    "error": "未找到"
+                                })
+                        else:
+                            results.append({
+                                "original": song,
+                                "found": False,
+                                "apple_music_url": "",
+                                "error": f"HTTP {response.status}"
+                            })
+                except Exception as e:
+                    results.append({
+                        "original": song,
+                        "found": False,
+                        "apple_music_url": "",
+                        "error": str(e)
+                    })
+                
+                if i < len(songs) - 1:
+                    await asyncio.sleep(0.3)
+        
+        return {"success": True, "results": results}
+    except Exception as e:
+        print(f"搜索错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
+    from fastapi.responses import HTMLResponse
 
     print("=" * 60)
-    print("🎵 QQ音乐→Apple Music歌单迁移工具 - 简化稳定版")
+    print("🎵 QQ音乐→Apple Music歌单迁移工具 - 最终修复版")
     print("=" * 60)
     print()
     print("🌐 访问: http://localhost:8000")
     print()
-    create_frontend()
     uvicorn.run(app, host="0.0.0.0", port=8000)
