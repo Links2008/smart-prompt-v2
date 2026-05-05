@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-QQ音乐→Apple Music歌单迁移工具 - 完全复刻GoMusic架构 + Apple Music API集成
+QQ音乐→Apple Music歌单迁移工具 - 完全复刻GoMusic架构 + Apple Music一键授权
 """
 import sys
 from pathlib import Path
@@ -87,6 +87,7 @@ def create_frontend():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QQ音乐→Apple Music歌单迁移</title>
+    <script src="https://js-cdn.music.apple.com/musickit/v1/musickit.js" async></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -115,14 +116,14 @@ def create_frontend():
         }
         button:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102,126,234,0.4); }
         button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        button.secondary { background: #f5f5f5; color: #333; }
-        button.secondary:hover { background: #e0e0e0; box-shadow: none; }
         button.apple {
             background: linear-gradient(135deg, #000000 0%, #333333 100%);
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
+            width: 100%;
+            max-width: 300px;
         }
         .status { padding: 15px; border-radius: 10px; margin-bottom: 20px; }
         .status.success { background: #e8f5e9; color: #2e7d32; }
@@ -149,7 +150,6 @@ def create_frontend():
             min-width: 150px;
         }
         .export-btn:hover { background: #e0e0e0; }
-        .export-btn.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
         .tips { background: #fff3e0; padding: 20px; border-radius: 10px; margin-top: 20px; }
         .tips h3 { color: #ef6c00; margin-bottom: 10px; }
         .tips p { color: #5d4037; line-height: 1.6; }
@@ -201,13 +201,23 @@ def create_frontend():
             color: #666;
             margin-bottom: 20px;
         }
+        .user-info {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .user-info p {
+            margin: 5px 0;
+            color: #2e7d32;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🎵 QQ音乐→Apple Music歌单迁移</h1>
-            <p>完全复刻GoMusic架构 + Apple Music一键登录</p>
+            <p>完全复刻GoMusic架构 + Apple Music一键授权</p>
         </div>
 
         <div class="card">
@@ -244,15 +254,30 @@ def create_frontend():
 
             <div id="exportContainer" class="hidden">
                 <div class="section">
-                    <h2>步骤2: 迁移到Apple Music</h2>
-                    <div class="login-section" id="loginSection">
+                    <h2>步骤2: 连接Apple Music并迁移</h2>
+                    
+                    <div id="loginSection" class="login-section">
                         <h3>🍎 连接Apple Music</h3>
                         <p>点击下方按钮，使用您的Apple ID登录授权</p>
-                        <button class="apple" onclick="connectAppleMusic()">
+                        <button class="apple" onclick="authorizeAppleMusic()">
                             <span class="apple-icon"></span>
                             使用Apple ID登录
                         </button>
+                        <p style="margin-top: 15px; font-size: 0.9rem; color: #999;">
+                            需要Apple Music订阅
+                        </p>
                     </div>
+
+                    <div id="userInfoSection" class="hidden">
+                        <div class="user-info">
+                            <p><strong>已连接Apple Music</strong></p>
+                            <p id="userName"></p>
+                        </div>
+                        <button onclick="startMigration()" style="width: 100%;">
+                            开始迁移到Apple Music
+                        </button>
+                    </div>
+
                     <div id="migrationProgress" class="hidden">
                         <div class="progress">
                             <div class="progress-bar">
@@ -288,7 +313,8 @@ def create_frontend():
                     <strong>方式1: 一键迁移（推荐）</strong><br>
                     1. 获取QQ音乐歌单<br>
                     2. 点击「使用Apple ID登录」<br>
-                    3. 授权后自动完成迁移<br><br>
+                    3. 在弹出窗口中输入Apple ID和密码授权<br>
+                    4. 授权成功后自动完成迁移<br><br>
                     
                     <strong>方式2: 手动迁移</strong><br>
                     1. 导出为TuneMyMusic或CSV格式<br>
@@ -301,6 +327,7 @@ def create_frontend():
 
     <script>
         let currentSongs = [];
+        let musicKit = null;
 
         function showStatus(type, message) {
             const container = document.getElementById('statusContainer');
@@ -389,20 +416,150 @@ def create_frontend():
             return div.innerHTML;
         }
 
-        async function connectAppleMusic() {
-            showStatus('info', '正在连接Apple Music...');
+        async function authorizeAppleMusic() {
+            showStatus('info', '正在初始化Apple Music...');
 
             try {
-                // 模拟Apple Music授权流程
-                // 在实际应用中，这里需要使用MusicKit JS
-                showStatus('info', '请在弹出的窗口中使用Apple ID登录授权');
+                // 检查MusicKit是否已加载
+                if (typeof MusicKit === 'undefined') {
+                    throw new Error('MusicKit未加载，请刷新页面重试');
+                }
 
-                // 由于需要Developer Token，这里提供替代方案
-                alert('提示：由于Apple Music API限制，需要Developer Token才能使用直接迁移功能。\\n\\n您可以选择：\\n1. 导出为TuneMyMusic格式，然后手动导入\\n2. 获取Apple Developer Token后使用');
+                // 配置MusicKit（需要Developer Token）
+                // 注意：这里需要有效的Developer Token
+                const developerToken = prompt(
+                    '请输入Apple Music Developer Token\\n\\n' +
+                    '如何获取Token:\\n' +
+                    '1. 访问 https://developer.apple.com\\n' +
+                    '2. 创建MusicKit密钥\\n' +
+                    '3. 生成JWT Token\\n\\n' +
+                    '或使用导出功能手动迁移'
+                );
+
+                if (!developerToken) {
+                    showStatus('error', '需要Developer Token才能使用Apple Music功能');
+                    return;
+                }
+
+                await MusicKit.configure({
+                    developerToken: developerToken,
+                    app: {
+                        name: 'QQ Music Migrator',
+                        build: '1.0.0'
+                    }
+                });
+
+                musicKit = MusicKit.getInstance();
+
+                // 请求用户授权
+                showStatus('info', '请在弹出窗口中使用Apple ID登录授权...');
+                
+                await musicKit.authorize();
+
+                // 授权成功
+                showStatus('success', 'Apple Music授权成功！');
+                
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('userInfoSection').classList.remove('hidden');
+                
+                const userName = musicKit.musicUserToken ? '已授权' : '用户';
+                document.getElementById('userName').textContent = `欢迎，${userName}`;
 
             } catch (error) {
-                console.error('连接失败:', error);
-                showStatus('error', '连接失败: ' + error.message);
+                console.error('授权失败:', error);
+                
+                if (error.message && error.message.includes('unauthorized')) {
+                    showStatus('error', '授权失败：请确保您有Apple Music订阅');
+                } else {
+                    showStatus('error', '授权失败: ' + (error.message || '未知错误'));
+                }
+            }
+        }
+
+        async function startMigration() {
+            if (!musicKit) {
+                showStatus('error', '请先连接Apple Music');
+                return;
+            }
+
+            const total = currentSongs.length;
+            let matched = 0;
+            let failed = 0;
+
+            showStatus('info', '开始搜索并匹配歌曲...');
+            document.getElementById('migrationProgress').classList.remove('hidden');
+
+            const matchedSongs = [];
+
+            for (let i = 0; i < currentSongs.length; i++) {
+                const song = currentSongs[i];
+                const progress = ((i + 1) / total * 100).toFixed(1);
+
+                document.getElementById('progressFill').style.width = progress + '%';
+                document.getElementById('progressText').textContent = 
+                    `正在处理: ${i + 1}/${total} - ${song.clean_name}`;
+
+                try {
+                    // 搜索歌曲
+                    const results = await musicKit.api.music(
+                        `/v1/catalog/${musicKit.storefrontId}/search`,
+                        {
+                            term: `${song.clean_name} ${song.singer}`,
+                            types: ['songs'],
+                            limit: 1
+                        }
+                    );
+
+                    if (results.data.results.songs && results.data.results.songs.data.length > 0) {
+                        const appleSong = results.data.results.songs.data[0];
+                        song.appleMusicId = appleSong.id;
+                        song.matched = true;
+                        matched++;
+                        matchedSongs.push(appleSong.id);
+                    } else {
+                        song.matched = false;
+                        failed++;
+                    }
+                } catch (error) {
+                    console.error(`搜索失败: ${song.clean_name}`, error);
+                    song.matched = false;
+                    failed++;
+                }
+
+                // 更新列表显示
+                renderSongList(currentSongs);
+
+                // 延迟避免API限流
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+
+            showStatus('success', `搜索完成！匹配成功: ${matched}，失败: ${failed}`);
+
+            // 创建歌单
+            if (matchedSongs.length > 0) {
+                showStatus('info', '正在创建Apple Music歌单...');
+
+                try {
+                    const playlist = await musicKit.api.library.createPlaylist({
+                        name: '从QQ音乐迁移的歌单',
+                        description: `共${matchedSongs.length}首歌曲`
+                    });
+
+                    // 添加歌曲到歌单
+                    await musicKit.api.library.add(
+                        playlist.id,
+                        'playlists',
+                        'tracks',
+                        matchedSongs.map(id => ({ id: id, type: 'songs' }))
+                    );
+
+                    showStatus('success', 
+                        `🎉 迁移成功！已创建歌单并添加${matchedSongs.length}首歌曲`);
+
+                } catch (error) {
+                    console.error('创建歌单失败:', error);
+                    showStatus('error', '创建歌单失败: ' + error.message);
+                }
             }
         }
 
@@ -458,7 +615,7 @@ if __name__ == "__main__":
     print("🎵 QQ音乐→Apple Music歌单迁移工具")
     print("=" * 60)
     print()
-    print("🎉 完全复刻GoMusic架构")
+    print("🎉 完全复刻GoMusic架构 + Apple Music一键授权")
     print("🌐 访问: http://localhost:8000")
     print("📚 文档: http://localhost:8000/docs")
     print()
@@ -466,6 +623,7 @@ if __name__ == "__main__":
     print("  - ✅ QQ音乐官方API调用（含签名算法）")
     print("  - ✅ 数据清洗与标准化")
     print("  - ✅ 歌曲标签检测（Live/Remix等）")
+    print("  - ✅ Apple Music一键授权迁移")
     print("  - ✅ TuneMyMusic格式导出")
     print("  - ✅ 支持公开歌单")
     print()
