@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-QQ音乐→Apple Music歌单迁移工具 - 曲线救国版 v2
-使用iTunes Search API直接跳转到Apple Music
+QQ音乐→Apple Music歌单迁移工具 - 极简版
+直接复制歌曲列表，手动搜索
 """
 import sys
 from pathlib import Path
@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from qqmusic_api import QQMusicAPI
 from data_cleaner import DataCleaner, Exporter
 
-app = FastAPI(title="QQ音乐→Apple Music歌单迁移工具", version="4.1.0")
+app = FastAPI(title="QQ音乐→Apple Music歌单迁移工具", version="5.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,7 +35,7 @@ async def root():
     index_path = BASE_DIR / "frontend" / "index.html"
     if index_path.exists():
         return FileResponse(index_path)
-    return {"message": "QQ音乐→Apple Music歌单迁移工具", "version": "4.1.0", "docs": "/docs"}
+    return {"message": "QQ音乐→Apple Music歌单迁移工具", "version": "5.0.0", "docs": "/docs"}
 
 @app.post("/api/qqmusic/playlist")
 async def fetch_playlist(request: PlaylistRequest):
@@ -116,80 +116,68 @@ def create_frontend():
         }
         button:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102,126,234,0.4); }
         button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        button.apple {
-            background: linear-gradient(135deg, #fc3c44 0%, #fc3c44 100%);
-        }
         .status { padding: 15px; border-radius: 10px; margin-bottom: 20px; }
         .status.success { background: #e8f5e9; color: #2e7d32; }
         .status.error { background: #ffebee; color: #c62828; }
         .status.info { background: #e3f2fd; color: #1565c0; }
-        .song-list { max-height: 500px; overflow-y: auto; }
+        .song-list { max-height: 400px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; background: #fafafa; }
         .song-item {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 15px; border-bottom: 1px solid #f0f0f0;
+            padding: 10px; border-bottom: 1px solid #e0e0e0; cursor: pointer;
+            transition: background 0.2s;
         }
         .song-item:last-child { border-bottom: none; }
-        .song-info { flex: 1; }
+        .song-item:hover { background: #e3f2fd; }
+        .song-item.selected { background: #e8f5e9; }
         .song-title { font-weight: 600; color: #333; }
         .song-singer { color: #666; font-size: 0.9rem; margin-top: 4px; }
-        .song-actions { display: flex; gap: 10px; }
         .tag { padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; margin-left: 8px; }
         .tag-live { background: #fff3e0; color: #ef6c00; }
         .tag-remix { background: #e3f2fd; color: #1976d2; }
-        .export-options { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
-        .export-btn {
-            flex: 1; padding: 12px; background: #f5f5f5; color: #333; border-radius: 8px;
-            text-align: center; font-weight: 500; transition: background 0.2s; cursor: pointer;
-            min-width: 150px;
+        .export-section {
+            background: #f8f9fa; padding: 25px; border-radius: 10px; margin-top: 20px;
         }
-        .export-btn:hover { background: #e0e0e0; }
+        .export-section h3 { margin-bottom: 15px; color: #333; }
+        .export-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .export-btn {
+            padding: 15px; background: white; color: #333; border: 2px solid #e0e0e0;
+            border-radius: 10px; text-align: center; font-weight: 500; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .export-btn:hover { border-color: #667eea; background: #f0f4ff; }
+        .export-btn.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; }
+        textarea {
+            width: 100%; min-height: 250px; padding: 15px; border: 1px solid #e0e0e0;
+            border-radius: 10px; font-family: 'Courier New', monospace; font-size: 14px;
+            resize: vertical; background: white;
+        }
+        .copy-btn {
+            width: 100%; margin-top: 10px; background: #fc3c44;
+        }
+        .copy-btn:hover { background: #d32f2f; }
         .tips { background: #fff3e0; padding: 20px; border-radius: 10px; margin-top: 20px; }
         .tips h3 { color: #ef6c00; margin-bottom: 10px; }
-        .tips p { color: #5d4037; line-height: 1.6; }
+        .tips p { color: #5d4037; line-height: 1.8; }
         .tips a { color: #667eea; text-decoration: none; }
+        .tips ol { margin-left: 20px; line-height: 1.8; }
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .stat-card { background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; }
         .stat-number { font-size: 2rem; font-weight: 700; color: #667eea; }
         .stat-label { color: #666; font-size: 0.9rem; margin-top: 5px; }
-        textarea {
-            width: 100%; min-height: 200px; padding: 15px; border: 1px solid #e0e0e0;
-            border-radius: 10px; font-family: monospace; resize: vertical;
-        }
         .section { margin-bottom: 30px; }
         .section h2 { margin-bottom: 15px; color: #333; }
         .hidden { display: none; }
-        .search-link {
-            padding: 8px 16px;
-            background: #fc3c44;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            display: inline-block;
-            transition: background 0.2s;
-            cursor: pointer;
-            border: none;
+        .search-tip {
+            background: #e3f2fd; padding: 15px; border-radius: 10px; margin-top: 15px;
+            border-left: 4px solid #2196f3;
         }
-        .search-link:hover {
-            background: #d32f2f;
-        }
-        .batch-actions {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-        }
-        .batch-actions h3 {
-            margin-bottom: 15px;
-            color: #333;
-        }
+        .search-tip p { color: #1565c0; margin: 5px 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🎵 QQ音乐→Apple Music歌单迁移</h1>
-            <p>曲线救国版 v2 - 使用iTunes搜索</p>
+            <p>极简版 - 快速导出歌曲列表</p>
         </div>
 
         <div class="card">
@@ -220,57 +208,53 @@ def create_frontend():
             </div>
 
             <div id="songListContainer" class="hidden">
-                <h3 style="margin-bottom: 15px;">歌单内容 - 点击按钮在Apple Music中搜索</h3>
+                <h3 style="margin-bottom: 15px;">歌单内容（点击歌曲可复制搜索词）</h3>
                 <div id="songList" class="song-list"></div>
+                <div class="search-tip">
+                    <p><strong>💡 快速搜索技巧：</strong></p>
+                    <p>• 点击任意歌曲，自动复制"歌名 歌手"到剪贴板</p>
+                    <p>• 然后在Apple Music中按 Cmd/Ctrl+V 粘贴搜索</p>
+                </div>
             </div>
 
             <div id="exportContainer" class="hidden">
-                <div class="batch-actions">
-                    <h3>批量操作</h3>
-                    <p style="margin-bottom: 15px; color: #666;">
-                        点击下方按钮，将自动依次在Apple Music中搜索歌曲
-                    </p>
-                    <button class="apple" onclick="openAllInAppleMusic()">
-                        🍎 在Apple Music中批量搜索所有歌曲
-                    </button>
-                    <p style="margin-top: 10px; font-size: 0.9rem; color: #999;">
-                        注意：此操作会打开多个标签页，请确保浏览器允许弹窗
-                    </p>
-                </div>
-
-                <div class="section" style="margin-top: 30px;">
-                    <h3 style="margin-bottom: 15px;">或者导出为文件</h3>
-                    <div class="export-options">
-                        <button class="export-btn" onclick="exportSongs('text')">
-                            📝 TuneMyMusic格式
+                <div class="export-section">
+                    <h3>步骤2: 导出歌曲列表</h3>
+                    <div class="export-buttons">
+                        <button class="export-btn primary" onclick="exportSongs('text')">
+                            📝 导出完整列表
                         </button>
                         <button class="export-btn" onclick="exportSongs('csv')">
-                            📊 CSV格式
+                            📊 导出CSV格式
+                        </button>
+                    </div>
+                    <div id="exportResultContainer" class="hidden">
+                        <textarea id="exportResult" readonly placeholder="导出结果将显示在这里..."></textarea>
+                        <button class="copy-btn" onclick="copyToClipboard()">
+                            📋 复制到剪贴板
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div id="exportResultContainer" class="hidden" style="margin-top: 20px;">
-                <h4 style="margin-bottom: 10px;">导出结果</h4>
-                <textarea id="exportResult" readonly></textarea>
-                <button onclick="copyToClipboard()" style="margin-top: 10px; width: 100%;">复制到剪贴板</button>
-            </div>
-
             <div class="tips">
                 <h3>💡 使用说明</h3>
-                <p>
-                    <strong>方式1: 曲线救国（推荐，无需Token）</strong><br>
-                    1. 获取QQ音乐歌单<br>
-                    2. 点击每首歌曲旁边的「在Apple Music搜索」按钮<br>
-                    3. 或点击「批量搜索」自动打开所有搜索页面<br>
-                    4. 在Apple Music中添加歌曲到您的歌单<br><br>
-                    
-                    <strong>方式2: 使用第三方工具</strong><br>
-                    1. 导出为TuneMyMusic或CSV格式<br>
-                    2. 前往 <a href="https://www.tunemymusic.com" target="_blank">TuneMyMusic</a> 导入<br>
-                    3. 选择Apple Music作为目标平台
-                </p>
+                <p><strong>推荐方式：使用第三方迁移工具</strong></p>
+                <ol>
+                    <li>点击「导出完整列表」按钮</li>
+                    <li>点击「复制到剪贴板」</li>
+                    <li>前往 <a href="https://www.tunemymusic.com" target="_blank">TuneMyMusic</a> 或 <a href="https://spotlistr.com" target="_blank">Spotlistr</a></li>
+                    <li>选择「任意文本」→ 粘贴 → 选择Apple Music作为目标</li>
+                    <li>工具会自动匹配并创建歌单</li>
+                </ol>
+                <br>
+                <p><strong>手动方式：逐首搜索</strong></p>
+                <ol>
+                    <li>点击歌单中的任意歌曲</li>
+                    <li>自动复制搜索词到剪贴板</li>
+                    <li>在Apple Music中粘贴搜索</li>
+                    <li>添加到您的歌单</li>
+                </ol>
             </div>
         </div>
     </div>
@@ -348,16 +332,9 @@ def create_frontend():
                 if (song.is_live) tags += '<span class="tag tag-live">Live</span>';
                 if (song.is_remix) tags += '<span class="tag tag-remix">Remix</span>';
 
-                return `<div class="song-item">
-                    <div class="song-info">
-                        <div class="song-title">${idx+1}. ${escapeHtml(song.clean_name)}${tags}</div>
-                        <div class="song-singer">${escapeHtml(song.singer)}</div>
-                    </div>
-                    <div class="song-actions">
-                        <button class="search-link" onclick="searchInAppleMusic('${escapeHtml(song.clean_name)}', '${escapeHtml(song.singer)}')">
-                            在Apple Music搜索
-                        </button>
-                    </div>
+                return `<div class="song-item" onclick="copySongSearch('${escapeHtml(song.clean_name)}', '${escapeHtml(song.singer)}', this)">
+                    <div class="song-title">${idx+1}. ${escapeHtml(song.clean_name)}${tags}</div>
+                    <div class="song-singer">${escapeHtml(song.singer)}</div>
                 </div>`;
             }).join('');
         }
@@ -368,70 +345,25 @@ def create_frontend():
             return div.innerHTML;
         }
 
-        async function searchInAppleMusic(songName, singer) {
-            const searchTerm = `${songName} ${singer}`;
-            const encodedTerm = encodeURIComponent(searchTerm);
+        function copySongSearch(songName, singer, element) {
+            const searchText = `${songName} ${singer}`;
             
-            // 使用iTunes Search API
-            const itunesUrl = `https://itunes.apple.com/search?term=${encodedTerm}&media=music&entity=song&limit=5`;
-            
-            try {
-                showStatus('info', '正在搜索...');
+            navigator.clipboard.writeText(searchText).then(() => {
+                // 移除其他选中状态
+                document.querySelectorAll('.song-item').forEach(item => item.classList.remove('selected'));
+                // 添加选中状态
+                element.classList.add('selected');
                 
-                const response = await fetch(itunesUrl);
-                const data = await response.json();
+                showStatus('success', `已复制: ${searchText}`);
                 
-                if (data.results && data.results.length > 0) {
-                    // 打开第一个结果的Apple Music链接
-                    const trackViewUrl = data.results[0].trackViewUrl;
-                    window.open(trackViewUrl, '_blank');
-                    showStatus('success', '已找到歌曲并在Apple Music中打开');
-                } else {
-                    // 如果找不到，打开Apple Music搜索页面
-                    const appleMusicSearchUrl = `https://music.apple.com/us/search?term=${encodedTerm}`;
-                    window.open(appleMusicSearchUrl, '_blank');
-                    showStatus('info', '未在iTunes找到，已在Apple Music中打开搜索页面');
-                }
-            } catch (error) {
-                console.error('搜索失败:', error);
-                // 出错时也打开Apple Music搜索页面
-                const appleMusicSearchUrl = `https://music.apple.com/us/search?term=${encodedTerm}`;
-                window.open(appleMusicSearchUrl, '_blank');
-                showStatus('error', '搜索出错，已在Apple Music中打开搜索页面');
-            }
-        }
-
-        function openAllInAppleMusic() {
-            if (currentSongs.length === 0) {
-                showStatus('error', '请先获取歌单');
-                return;
-            }
-
-            const confirmed = confirm(
-                `即将搜索并打开 ${currentSongs.length} 首歌曲\\n` +
-                `请确保浏览器允许弹窗\\n\\n` +
-                `是否继续？`
-            );
-
-            if (!confirmed) {
-                return;
-            }
-
-            let processed = 0;
-            const delay = 1000; // 每个搜索间隔1秒
-
-            currentSongs.forEach((song, idx) => {
+                // 3秒后清除提示
                 setTimeout(() => {
-                    searchInAppleMusic(song.clean_name, song.singer);
-                    processed++;
-
-                    if (processed === currentSongs.length) {
-                        showStatus('success', `已处理 ${processed} 首歌曲`);
-                    }
-                }, idx * delay);
+                    clearStatus();
+                }, 3000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+                showStatus('error', '复制失败，请手动复制');
             });
-
-            showStatus('info', `正在处理 ${currentSongs.length} 首歌曲...`);
         }
 
         async function exportSongs(format) {
@@ -454,6 +386,8 @@ def create_frontend():
                 document.getElementById('exportResultContainer').classList.remove('hidden');
                 document.getElementById('exportResult').value = result.content;
 
+                showStatus('success', '导出成功！点击下方按钮复制');
+
             } catch (error) {
                 showStatus('error', error.message || '导出失败');
             }
@@ -463,7 +397,7 @@ def create_frontend():
             const textarea = document.getElementById('exportResult');
             textarea.select();
             document.execCommand('copy');
-            showStatus('success', '已复制到剪贴板！');
+            showStatus('success', '已复制到剪贴板！现在可以去TuneMyMusic粘贴了');
         }
 
         document.getElementById('qqmusicUrl').addEventListener('keypress', (e) => {
@@ -483,21 +417,19 @@ if __name__ == "__main__":
     import uvicorn
 
     print("=" * 60)
-    print("🎵 QQ音乐→Apple Music歌单迁移工具 - 曲线救国版 v2")
+    print("🎵 QQ音乐→Apple Music歌单迁移工具 - 极简版")
     print("=" * 60)
     print()
-    print("🎉 使用iTunes Search API直接跳转到Apple Music")
+    print("🎉 快速导出歌曲列表，一键复制")
     print("🌐 访问: http://localhost:8000")
     print("📚 文档: http://localhost:8000/docs")
     print()
     print("📋 功能特性:")
     print("  - ✅ QQ音乐官方API调用（含签名算法）")
     print("  - ✅ 数据清洗与标准化")
-    print("  - ✅ 歌曲标签检测（Live/Remix等）")
-    print("  - ✅ iTunes Search API搜索")
-    print("  - ✅ 自动跳转到Apple Music歌曲页面")
-    print("  - ✅ 批量搜索并打开")
-    print("  - ✅ TuneMyMusic格式导出")
+    print("  - ✅ 点击歌曲自动复制搜索词")
+    print("  - ✅ 一键导出完整列表")
+    print("  - ✅ 支持TuneMyMusic导入")
     print("  - ✅ 支持公开歌单")
     print()
     print("=" * 60)
