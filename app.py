@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-
+from fastapi import Request
 from qqmusic_api import QQMusicAPI
 from data_cleaner import DataCleaner
 
@@ -27,6 +27,14 @@ app.add_middleware(
 )
 
 BASE_DIR = Path(__file__).parent
+
+
+class PlaylistRequest(BaseModel):
+    url: str = ""
+
+class SearchRequest(BaseModel):
+    songs: list = []
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
@@ -345,9 +353,9 @@ async def root():
     return HTMLResponse(content=html)
 
 @app.post("/api/qqmusic/playlist")
-async def fetch_playlist(request: BaseModel):
+async def fetch_playlist(request: PlaylistRequest):
     try:
-        url = getattr(request, 'url', '')
+        url = request.url
         if not url:
             raise ValueError("请提供QQ音乐歌单链接")
         
@@ -374,10 +382,10 @@ async def fetch_playlist(request: BaseModel):
         return {"success": False, "error": str(e)}
 
 @app.post("/api/search-itunes")
-async def search_itunes(request: BaseModel):
+async def search_itunes(request: SearchRequest):
     """批量搜索iTunes，返回Apple Music链接"""
     try:
-        songs = getattr(request, 'songs', [])
+        songs = request.songs
         results = []
         
         async with aiohttp.ClientSession() as session:
